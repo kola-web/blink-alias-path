@@ -10,6 +10,7 @@
 --- @field get_cwd fun(context: blink.cmp.Context): string
 --- @field show_hidden_files_by_default boolean
 --- @field ignore_root_slash boolean
+--- @field path_mappings table
 
 --- @class blink.cmp.Source
 --- @field opts blink.cmp.PathOpts
@@ -25,6 +26,7 @@ function path.new(opts)
     get_cwd = function(context) return vim.fn.expand(('#%d:p:h'):format(context.bufnr)) end,
     show_hidden_files_by_default = false,
     ignore_root_slash = false,
+    path_mappings = {}
   })
   require('blink.cmp.config.utils').validate('sources.providers.path', {
     trailing_slash = { opts.trailing_slash, 'boolean' },
@@ -32,6 +34,7 @@ function path.new(opts)
     get_cwd = { opts.get_cwd, 'function' },
     show_hidden_files_by_default = { opts.show_hidden_files_by_default, 'boolean' },
     ignore_root_slash = { opts.ignore_root_slash, 'boolean' },
+    path_mappings = {opts.path_mappings, 'table'}
   }, opts)
 
   self.opts = opts
@@ -44,29 +47,44 @@ function path:get_completions(context, callback)
   -- we use libuv, but the rest of the library expects to be synchronous
   callback = vim.schedule_wrap(callback)
 
-  local lib = require('blink.cmp.sources.path.lib')
+  local lib = require('blink-alias-path.lib')
+	local current_directory = vim.fn.getcwd() or ""
+  local path_mappings = self.opts.path_mappings
 
-  local dirname = lib.dirname(self.opts, context)
-  if not dirname then return callback({ is_incomplete_forward = false, is_incomplete_backward = false, items = {} }) end
+  local process_alias = function (alias_key,alias_value)
+    local alias_string = string.gsub(alias_value, "${folder}", current_directory, 1)
+    local dirname = lib.dirname(self.opts, context, alias_key, alias_string)
+    if not dirname then return callback({ is_incomplete_forward = false, is_incomplete_backward = false, items = {} }) end
 
-  local include_hidden = self.opts.show_hidden_files_by_default
-    or (string.sub(context.line, context.bounds.start_col, context.bounds.start_col) == '.' and context.bounds.length == 0)
-    or (
-      string.sub(context.line, context.bounds.start_col - 1, context.bounds.start_col - 1) == '.'
-      and context.bounds.length > 0
-    )
-  lib
-    .candidates(context, dirname, include_hidden, self.opts)
-    :map(
-      function(candidates)
-        callback({ is_incomplete_forward = false, is_incomplete_backward = false, items = candidates })
-      end
-    )
-    :catch(function() callback() end)
+    local include_hidden = self.opts.show_hidden_files_by_default
+      or (string.sub(context.line, context.bounds.start_col, context.bounds.start_col) == '.' and context.bounds.length == 0)
+      or (
+        string.sub(context.line, context.bounds.start_col - 1, context.bounds.start_col - 1) == '.'
+        and context.bounds.length > 0
+      )
+    lib
+      .candidates(context, dirname, include_hidden, self.opts)
+      :map(
+        function(candidates)
+          callback({ is_incomplete_forward = false, is_incomplete_backward = false, items = candidates })
+        end
+      )
+      :catch(function() callback() end)
+  end
+
+
+  if path_mappings and #table then
+    for alias_key, alias_value in pairs(path_mappings) do
+      process_alias(alias_key, alias_value)
+    end
+  else
+    process_alias()
+  end
+
 end
 
 function path:resolve(item, callback)
-  require('blink.cmp.sources.path.fs')
+  require('blink-alias-path.fs')
     .read_file(item.data.full_path, 1024)
     :map(function(content)
       local is_binary = content:find('\0')

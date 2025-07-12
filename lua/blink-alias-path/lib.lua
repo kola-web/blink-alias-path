@@ -1,12 +1,20 @@
-local regex = require('blink.cmp.sources.path.regex')
+local regex = require('blink-alias-path.regex')
 local lib = {}
 
 --- @param opts blink.cmp.PathOpts
 --- @param context blink.cmp.Context
-function lib.dirname(opts, context)
+--- @param alias_key string
+--- @param alias_value string
+function lib.dirname(opts, context, alias_key, alias_value)
   -- HACK: move this :sub logic into the context?
   -- it's not obvious that you need to avoid going back a char if the start_col == end_col
   local line_before_cursor = context.line:sub(1, context.bounds.start_col - (context.bounds.length == 0 and 1 or 0))
+  if alias_key and alias_value  then
+    line_before_cursor = line_before_cursor
+      :gsub("'" .. alias_key, "'" .. alias_value, 1)
+      :gsub('"' .. alias_key, '"' .. alias_value, 1)
+  end
+
   local s = regex.PATH:match_str(line_before_cursor)
   if not s then return nil end
 
@@ -55,7 +63,7 @@ end
 --- @param include_hidden boolean
 --- @param opts table
 function lib.candidates(context, dirname, include_hidden, opts)
-  local fs = require('blink.cmp.sources.path.fs')
+  local fs = require('blink-alias-path.fs')
   local ranges = lib.get_text_edit_ranges(context)
   return fs.scan_dir_async(dirname)
     :map(function(entries) return fs.fs_stat_all(dirname, entries) end)

@@ -11,7 +11,7 @@ local PATH_REGEX
 if IS_WIN then
   PATH_REGEX = assert(
     vim.regex(
-      ([[\%(\%([/\\]PAT1*[^/\\\\:\\*?<>\'"`\\| .~]\)\|\%(/\.\.\)\)*[/\\]\zePAT2*$]])
+      ([[\%(\%([/\\]PAT1*[^/\\\\:\\*?<>\'"`\\|@ .~]\)\|\%(/\.\.\)\)*[/\\]\zePAT2*$]])
         :gsub('PAT1', NAME_WITH_SPACE_REGEX)
         :gsub('PAT2', NAME_REGEX)
     )
@@ -19,7 +19,7 @@ if IS_WIN then
 else
   PATH_REGEX = assert(
     vim.regex(
-      ([[\%(\%(/PAT1*[^/\\\\:\\*?<>\'"`\\| .~]\)\|\%(/\.\.\)\)*/\zePAT2*$]])
+      ([[\%(\%(/PAT1*[^/\\\\:\\*?<>\'"`\\|@ .~]\)\|\%(/\.\.\)\)*/\zePAT2*$]])
         :gsub('PAT1', NAME_WITH_SPACE_REGEX)
         :gsub('PAT2', NAME_REGEX)
     )
