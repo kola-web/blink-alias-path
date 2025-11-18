@@ -10,6 +10,7 @@
 --- @field get_cwd fun(context: blink.cmp.Context): string
 --- @field show_hidden_files_by_default boolean
 --- @field ignore_root_slash boolean
+--- @field max_entries number  Maximum number of files/directories to return. This limits memory use and responsiveness for very large folders. Defaults to 10000
 --- @field path_mappings table
 
 --- @class blink.cmp.Source
@@ -26,6 +27,7 @@ function path.new(opts)
     get_cwd = function(context) return vim.fn.expand(('#%d:p:h'):format(context.bufnr)) end,
     show_hidden_files_by_default = false,
     ignore_root_slash = false,
+    max_entries = 10000,
     path_mappings = {}
   })
   require('blink.cmp.config.utils').validate('sources.providers.path', {
@@ -34,11 +36,12 @@ function path.new(opts)
     get_cwd = { opts.get_cwd, 'function' },
     show_hidden_files_by_default = { opts.show_hidden_files_by_default, 'boolean' },
     ignore_root_slash = { opts.ignore_root_slash, 'boolean' },
+    max_entries = { opts.max_entries, 'number' },
     path_mappings = {opts.path_mappings, 'table'}
   }, opts)
 
   self.opts = opts
-  return self
+  return self --[[@as blink.cmp.Source]]
 end
 
 function path:get_trigger_characters() return { '/', '.', '\\' } end
@@ -48,7 +51,7 @@ function path:get_completions(context, callback)
   callback = vim.schedule_wrap(callback)
 
   local lib = require('blink-alias-path.lib')
-	local current_directory = vim.fn.getcwd() or ""
+  local current_directory = vim.fn.getcwd() or ""
   local path_mappings = self.opts.path_mappings
 
   local process_alias = function (alias_key,alias_value)

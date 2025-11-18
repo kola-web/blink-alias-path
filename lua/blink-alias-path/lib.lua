@@ -1,3 +1,4 @@
+local async = require('blink.cmp.lib.async')
 local regex = require('blink-alias-path.regex')
 local lib = {}
 
@@ -61,28 +62,40 @@ end
 --- @param context blink.cmp.Context
 --- @param dirname string
 --- @param include_hidden boolean
---- @param opts table
+--- @param opts blink.cmp.PathOpts
+--- @return blink.cmp.Task
 function lib.candidates(context, dirname, include_hidden, opts)
-  local fs = require('blink-alias-path.fs')
+  local fs = require('blink.cmp.sources.path.fs')
   local ranges = lib.get_text_edit_ranges(context)
-  return fs.scan_dir_async(dirname)
-    :map(function(entries) return fs.fs_stat_all(dirname, entries) end)
-    :map(function(entries)
-      return vim.tbl_filter(function(entry) return include_hidden or entry.name:sub(1, 1) ~= '.' end, entries)
+  local results = {}
+  local cancelled = false
+
+  -- Prevents excessive memory growth when scanning huge directories
+  local mem_usage_kb = collectgarbage('count')
+  local threshold_kb = 100 * 1024 -- 100Mb
+  if mem_usage_kb > threshold_kb then collectgarbage('collect') end
+
+  return async.task.new(function(resolve, reject)
+    fs.scan_dir_async(dirname, function(entries_chunk)
+      if cancelled then return end
+
+      for _, entry in ipairs(entries_chunk) do
+        if include_hidden or entry.name:sub(1, 1) ~= '.' then
+          local kind = entry.type == 'directory' and ranges.directory or ranges.file
+          local item = lib.entry_to_completion_item(entry, dirname, kind, opts)
+          results[#results + 1] = item
+
+          if #results >= opts.max_entries then
+            vim.print(string.format('%d entries in path source reached, further files ignored.', opts.max_entries))
+            cancelled = true
+            return
+          end
+        end
+      end
     end)
-    :map(function(entries)
-      return vim.tbl_map(
-        function(entry)
-          return lib.entry_to_completion_item(
-            entry,
-            dirname,
-            entry.type == 'directory' and ranges.directory or ranges.file,
-            opts
-          )
-        end,
-        entries
-      )
-    end)
+      :map(function() resolve(results) end)
+      :catch(reject)
+  end)
 end
 
 function lib.is_slash_comment()
@@ -109,7 +122,7 @@ function lib.entry_to_completion_item(entry, dirname, range, opts)
     insertText = insert_text,
     textEdit = { newText = insert_text, range = range },
     sortText = (is_dir and '1' or '2') .. entry.name:lower(), -- Sort directories before files
-    data = { path = entry.name, full_path = dirname .. '/' .. entry.name, type = entry.type, stat = entry.stat },
+    data = { path = entry.name, full_path = dirname .. '/' .. entry.name, type = entry.type },
   }
 end
 
@@ -181,16 +194,6 @@ function lib.basename_with_sep(path)
   local basename = vim.fs.basename(is_dir and path:sub(1, -2) or path)
   if is_dir then basename = basename .. sep end
   return basename
-end
-
--- Reverts the escaping of environment variable of vim.fn.fnameescape
----@param path string
----@return string
-function lib:fnameescape(path)
-  path = vim.fn.fnameescape(path)
-  path = path:gsub('\\(%$[%w_]+)', '%1')
-  path = path:gsub('\\(%${[%w_]+})', '%1')
-  return path
 end
 
 --- Splits a string on spaces, but only when the space is not escaped by a backslash.
@@ -304,3 +307,4 @@ function lib:compute_unique_suffixes(paths)
 end
 
 return lib
+

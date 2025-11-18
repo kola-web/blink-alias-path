@@ -32,3 +32,4 @@ return {
   --- Vim regex for matching file paths
   PATH = PATH_REGEX,
 }
+
