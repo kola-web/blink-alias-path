@@ -54,8 +54,8 @@ function path:get_completions(context, callback)
   local current_directory = vim.fn.getcwd() or ""
   local path_mappings = self.opts.path_mappings
 
-  local process_alias = function (alias_key,alias_value)
-    local alias_string = string.gsub(alias_value, "${folder}", current_directory, 1)
+  local process_alias = function (alias_key, alias_value)
+    local alias_string = alias_value and string.gsub(alias_value, "${folder}", current_directory, 1) or nil
     local dirname = lib.dirname(self.opts, context, alias_key, alias_string)
     if not dirname then return callback({ is_incomplete_forward = false, is_incomplete_backward = false, items = {} }) end
 
@@ -76,12 +76,12 @@ function path:get_completions(context, callback)
   end
 
 
-  if path_mappings and #table then
+  if path_mappings and next(path_mappings) then
     for alias_key, alias_value in pairs(path_mappings) do
       process_alias(alias_key, alias_value)
     end
   else
-    process_alias()
+    process_alias(nil, nil)
   end
 
 end

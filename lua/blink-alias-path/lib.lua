@@ -65,7 +65,7 @@ end
 --- @param opts blink.cmp.PathOpts
 --- @return blink.cmp.Task
 function lib.candidates(context, dirname, include_hidden, opts)
-  local fs = require('blink.cmp.sources.path.fs')
+  local fs = require('blink-alias-path.fs')
   local ranges = lib.get_text_edit_ranges(context)
   local results = {}
   local cancelled = false
